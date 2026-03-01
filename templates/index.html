@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Word Similarity Finder</title>
+  <!-- Link to our external stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <!-- Google Fonts: Playfair Display for title, DM Sans for body -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <div class="page-wrapper">
+
+    <!-- ── Header ── -->
+    <header class="header">
+      <div class="header-icon">🔍</div>
+      <h1 class="title">Word Similarity Finder</h1>
+      <p class="subtitle">
+        Enter any English word to discover its five most semantically similar
+        words, powered by GloVe word embeddings &amp; cosine similarity.
+      </p>
+    </header>
+
+    <!-- ── Search Card ── -->
+    <main class="card">
+      <div class="search-row">
+        <input
+          type="text"
+          id="wordInput"
+          class="search-input"
+          placeholder="e.g. ocean, justice, music…"
+          autocomplete="off"
+        />
+        <button id="searchBtn" class="search-btn" onclick="findSimilar()">
+          Find Similar
+        </button>
+      </div>
+
+      <!-- Error / Info message -->
+      <div id="message" class="message hidden"></div>
+
+      <!-- Results section (hidden until there are results) -->
+      <div id="results-section" class="results-section hidden">
+        <p class="results-label">
+          Top 5 words similar to <span id="queryWord" class="query-highlight"></span>:
+        </p>
+
+        <!-- Table of results -->
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Word</th>
+              <th>Similarity Score</th>
+              <th>Relevance</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+            <!-- Rows injected by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Loading spinner (hidden by default) -->
+      <div id="loader" class="loader hidden">
+        <div class="spinner"></div>
+        <p>Searching the embedding space…</p>
+      </div>
+    </main>
+
+    <!-- ── Footer ── -->
+    <footer class="footer">
+      Built with Flask · GloVe Embeddings · Cosine Similarity &nbsp;|&nbsp; NLP Mini Project
+    </footer>
+
+  </div>
+
+  <script>
+    /* ── Allow pressing Enter to trigger search ── */
+    document.getElementById("wordInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") findSimilar();
+    });
+
+    /* ── Main search function ── */
+    async function findSimilar() {
+      const input = document.getElementById("wordInput");
+      const word = input.value.trim();
+
+      // Basic client-side validation
+      if (!word) {
+        showMessage("Please enter a word before searching.", "warn");
+        return;
+      }
+
+      // Show loader, hide old results & messages
+      hideResults();
+      showLoader(true);
+
+      try {
+        // Send POST request to Flask backend
+        const response = await fetch("/find_similar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ word: word }),
+        });
+
+        const data = await response.json();
+        showLoader(false);
+
+        if (data.error) {
+          // Word not in vocabulary
+          showMessage(data.error, "error");
+        } else {
+          // Display the results
+          renderResults(data.word, data.results);
+        }
+      } catch (err) {
+        showLoader(false);
+        showMessage("Something went wrong. Make sure the Flask server is running.", "error");
+      }
+    }
+
+    /* ── Render result rows into the table ── */
+    function renderResults(word, results) {
+      document.getElementById("queryWord").textContent = word;
+      const tbody = document.getElementById("resultsBody");
+      tbody.innerHTML = "";
+
+      results.forEach((item, index) => {
+        const pct = (item.score * 100).toFixed(1);
+        const row = document.createElement("tr");
+        row.style.animationDelay = `${index * 80}ms`;
+        row.classList.add("fade-in-row");
+        row.innerHTML = `
+          <td class="rank">${index + 1}</td>
+          <td class="word-cell">${item.word}</td>
+          <td class="score-cell">${item.score}</td>
+          <td class="bar-cell">
+            <div class="bar-track">
+              <div class="bar-fill" style="width: ${pct}%"></div>
+            </div>
+            <span class="bar-label">${pct}%</span>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      document.getElementById("results-section").classList.remove("hidden");
+    }
+
+    /* ── Helper: show a status message ── */
+    function showMessage(text, type) {
+      const el = document.getElementById("message");
+      el.textContent = text;
+      el.className = "message " + type;
+    }
+
+    /* ── Helper: hide results & clear messages ── */
+    function hideResults() {
+      document.getElementById("results-section").classList.add("hidden");
+      document.getElementById("message").className = "message hidden";
+    }
+
+    /* ── Helper: toggle loading spinner ── */
+    function showLoader(visible) {
+      const loader = document.getElementById("loader");
+      loader.classList.toggle("hidden", !visible);
+    }
+  </script>
+
+</body>
+</html>
